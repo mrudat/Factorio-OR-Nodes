@@ -15,7 +15,7 @@ local prerequisites = {
   "some-other-technology"
 }
 
-local technology_name = next(roboport_technology_name)
+local technology_name = roboport_technology_name[1]
 if technology_name then
   table.insert(prerequisites, technology_name)
 end
@@ -44,8 +44,8 @@ data:extend({
 
 * depend_on_item(item, item_type, silent) - depend on the ability to create item (or fluid).
 * depend_on_items(items, silent) - depend on the ability to create at least one of the items.
-* depend_on_recipe(recipe, silent) - depend on ability to craft the recipe.
-* depend_on_recipes(recipes, silent) - depend on ability to craft at least one of the recipes.
+* depend_on_recipe(recipe, silent) - depend on the ability to craft the recipe.
+* depend_on_recipes(recipes, silent) - depend on the ability to craft at least one of the recipes.
 * depend_on_technologies(technologies, silent) - depend on at least one of the technologies being researched
 
 There is no depend_on_technology, as that would just return the supplied technology.
