@@ -1,4 +1,4 @@
-Allows mods to request the creation of 'OR nodes' in the technology tree.
+Library to allow mods to request the creation of 'OR nodes' in the technology tree.
 
 For example, if a mod wants to add a dependency on roboports being unlocked, this is currently not possible, as a roboport is unlocked with either researching construction robots or logistics robots.
 
