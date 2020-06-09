@@ -1,4 +1,15 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.0.3
+Date: 2020-06-10
+
+  Changes:
+    - Only list 1-5 alternatives in the description.
+  Bugfixes:
+    - Don't add the only illegal character '.' to derived technology names when they are over 200 characters long.
+    - Ignore rather than crash on recipes that define neither result nor results.
+    - Avoid running into the localised name recursion limit.
+
+---------------------------------------------------------------------------------------------------
 Version: 0.0.2
 Date: 2020-06-06
 

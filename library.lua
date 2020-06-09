@@ -27,7 +27,6 @@ local bnot = bit32.bnot
 #define DIFFICULTY_BOTH      3
 #define DIFFICULTY_MASK      3
 
-
 ]]
 
 local F = {}
@@ -187,12 +186,14 @@ local function build_recipe_index()
     if result_name then
       return catalog_result(recipe_name, result_name, 'item', recipe_flags)
     else
-      for _,result in ipairs(recipe_data.results) do
+      local results = recipe_data.results
+      if not results then return end
+      for _,result in ipairs(results) do
         local result_type = result.type
         if result_type then
-          return catalog_result(recipe_name, result.name, result_type, recipe_flags)
+          catalog_result(recipe_name, result.name, result_type, recipe_flags)
         else
-          return catalog_result(recipe_name, result.name or result[1], 'item', recipe_flags)
+          catalog_result(recipe_name, result.name or result[1], 'item', recipe_flags)
         end
       end
     end
@@ -239,7 +240,7 @@ local function collect_recipes_for_item(recipes, item)
   end
 end
 
-function get_technology_enabled_flags(technology)
+local function get_technology_enabled_flags(technology)
   local expensive = technology.expensive
   local normal = technology.normal
   -- https://wiki.factorio.com/Prototype/Recipe#Recipe_data
@@ -278,7 +279,7 @@ function get_technology_enabled_flags(technology)
   end
 end
 
-function get_recipe_enabled_flags(recipe)
+local function get_recipe_enabled_flags(recipe)
   local expensive = recipe.expensive
   local normal = recipe.normal
   -- https://wiki.factorio.com/Prototype/Recipe#Recipe_data
@@ -340,21 +341,31 @@ local function compose_icons(icons)
   return temp
 end
 
+local compose_names_lookup = {
+  nil,
+  "OR-Nodes.list-2",
+  "OR-Nodes.list-3",
+  "OR-Nodes.list-4",
+  "OR-Nodes.list-5"
+}
+
 local function compose_names(names)
-  if #names == 2 then
-    return {"OR-Nodes.list-2", names[1].name, names[2].name}
-  end
-  local temp = {"OR-Nodes.list-end", names[#names-1].name, names[#names].name}
-  names[#names] = nil
-  names[#names] = nil
-  for i=#names,1,-1 do
-    if #names > 1 then
-      temp = {"OR-Nodes.list-middle", names[i].name, temp}
-    else
-      temp = {"OR-Nodes.list-start", names[i].name, temp}
+  local foo = compose_names_lookup[#names]
+  local result
+  if foo then
+    result = {foo}
+    for _, name in ipairs(names) do
+      result[#result+1] = name.name
     end
+    return result
+  else
+    result = {"OR-Nodes.list-6+"}
+    for i = 1, 4 do
+      result[i+1] = names[i].name
+    end
+    result[6] = names[#names].name
   end
-  return temp
+  return result
 end
 
 
@@ -369,7 +380,7 @@ local new_technologies = {}
 local new_technologies_collisions = {}
 local unnamed_technology_count = 1
 
-local function create_or_node(node_data, levels, is_silent)
+local function create_or_node(node_data, levels, is_silent) --luacheck: no unused args
   local target_name = node_data.target_name
   local old_technology = new_technologies[target_name]
   if old_technology then return { old_technology } end
@@ -382,7 +393,8 @@ local function create_or_node(node_data, levels, is_silent)
     repeat
       local names_hash = hash(target_name .. try)
       short_tech_name = PREFIX .. names_hash .. "-" .. target_name
-      short_tech_name = short_tech_name:sub(1,200 - 3) .. "..."
+      -- "…":len() == 3
+      short_tech_name = short_tech_name:sub(1, 200 - 3) .. "…"
       if try == '' then
         try = 0
       else
@@ -692,22 +704,22 @@ function F.depend_on_technologies(technology_names, is_silent)
   local target_names = {}
   local icons = {}
   local names = {}
-  local technology_index = 0
+  local technology_count = 0
 
   table.sort(technology_names)
 
   for _,technology_name in pairs(technology_names) do
     local technology = find_prototype(technology_name, 'technology', true)
     if technology then
-      technology_index = technology_index + 1
-      target_names[technology_index] = technology_name
+      technology_count = technology_count + 1
+      target_names[technology_count] = technology_name
       found_technology_names[technology_name] = get_technology_enabled_flags(technology)
-      icons[technology_index] = icons_of(technology)
-      names[technology_index] = locale_of(technology)
+      icons[technology_count] = icons_of(technology)
+      names[technology_count] = locale_of(technology)
     end
   end
 
-  if not next(found_technology_names) then
+  if technology_count == 0 then
     return report_error(is_silent, 1, 'None of the technologies were found.')
   end
 
@@ -742,7 +754,7 @@ function F.depend_on_recipes(recipe_names, is_silent)
   local found_recipe_names = {}
   local icons = {}
   local names = {}
-  local recipe_index = 0
+  local recipe_count = 0
 
   for _,recipe_name in pairs(recipe_names) do
     if not type(recipe_name) == 'string' then
@@ -750,15 +762,15 @@ function F.depend_on_recipes(recipe_names, is_silent)
     end
     local recipe = find_prototype(recipe_name, 'recipe', true)
     if recipe then
-      recipe_index = recipe_index + 1
-      target_names[recipe_index] = recipe_name
+      recipe_count = recipe_count + 1
+      target_names[recipe_count] = recipe_name
       found_recipe_names[recipe_name] = 3 + get_recipe_enabled_flags(recipe) -- DIFFICULTY_BOTH
-      icons[recipe_index] = icons_of_recipe(recipe)
-      names[recipe_index] = locale_of_recipe(recipe)
+      icons[recipe_count] = icons_of_recipe(recipe)
+      names[recipe_count] = locale_of_recipe(recipe)
     end
   end
 
-  if #target_names == 0 then
+  if recipe_count == 0 then
     return report_error(is_silent, 1, 'None of the recipes were found.')
   end
 

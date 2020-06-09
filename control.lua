@@ -1,5 +1,3 @@
-local util = require("util")
-
 local PREFIX = "OR-Nodes-"
 
 local is_ours
@@ -15,8 +13,6 @@ do
   local technology_index = {}
 
   local function build_technology_index()
-    local technology_index = technology_index
-    local is_ours = is_ours
     for technology_name,technology in pairs(game.technology_prototypes) do
       if not is_ours(technology_name) then goto next_technology end
       for prerequisite_name in pairs(technology.prerequisites) do

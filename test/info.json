@@ -1,0 +1,12 @@
+{
+	"name": "Test mod",
+	"version": "0.0.1",
+	"title": "Test mod",
+	"author": "Martin Rudat",
+	"dependencies": [
+		"OR-Nodes >= 0.0.1"
+	],
+	"description": "Test for OR-Nodes.",
+	"factorio_version": "0.18",
+	"homepage": ""
+}
