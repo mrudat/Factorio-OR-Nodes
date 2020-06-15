@@ -1,4 +1,13 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.0.4
+Date: TBA
+
+  Changes:
+    - Add integration with 'Highly Derivative'
+    - Change OR-Nodes to cost no science-packs and a single tick to research.
+    - Add AND-Nodes
+
+---------------------------------------------------------------------------------------------------
 Version: 0.0.3
 Date: 2020-06-10
 

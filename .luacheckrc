@@ -20,7 +20,8 @@ read_globals = {
       'combine_icons',
       'parse_energy'
     }
-  }
+  },
+  'mods'
 }
 
 local data_settings = {

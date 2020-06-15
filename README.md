@@ -7,7 +7,7 @@ OR nodes creates a new 'OR node' (technology) that depends on construction robot
 Our hypothetical mod then merely needs to depend on the new technology.
 
 ```lua
-local ORNodes = require('__OR-Nodes__/library.lua').init()
+local ORNodes = require('__OR-Nodes__.library').init()
 
 local roboport_technology_name = ORNodes.depend_on_item("roboport")
 
@@ -42,10 +42,27 @@ data:extend({
 
 # Functions
 
+## Or nodes
+
+These produce a technology that is automatically researched when *any* of the prerequisites technologies are researched.
+
 * depend_on_item(item, item_type, silent) - depend on the ability to create item (or fluid).
-* depend_on_items(items, silent) - depend on the ability to create at least one of the items.
+* depend_on_any_item/depend_on_items(items, silent) - depend on the ability to create at least one of the items (or fluids).
 * depend_on_recipe(recipe, silent) - depend on the ability to craft the recipe.
-* depend_on_recipes(recipes, silent) - depend on the ability to craft at least one of the recipes.
-* depend_on_technologies(technologies, silent) - depend on at least one of the technologies being researched
+* depend_on_any_recipe/depend_on_recipes(recipes, silent) - depend on the ability to craft at least one of the recipes.
+* depend_on_any_technology/depend_on_technologies(technologies, silent) - depend on at least one of the technologies having been researched
 
 There is no depend_on_technology, as that would just return the supplied technology.
+
+## And nodes
+
+These produce a technology that is automatically researched when *all* of the prerequisites technologies are researched.
+
+* depend_on_all_recipe_ingredients(recipe, silent) - depend on the ability to create all of the items required to craft recipe.
+* depend_on_all_items(items, silent) - depend on the ability to create all of the items.
+* depend_on_all_recipes(recipes, silent) - depend on the ability to craft all of the recipes.
+* depend_on_all_technologies(technologies, silent) - depend on all of the technologies having been researched
+
+# Limitations
+
+Does not (yet) automatically determine if a given resource is unlocked or not, if you need to depend on a resource that has its extraction unlocked by research (for example, crude-oil), you will need to supply the technology name yourself.
