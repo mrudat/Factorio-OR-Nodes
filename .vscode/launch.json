@@ -7,10 +7,36 @@
         {
             "type": "factoriomod",
             "request": "launch",
-            "name": "Factorio Mod Debug",
+            "name": "Highly Derivative",
             "factorioPath": "C:\\Program Files\\Factorio\\bin\\x64\\factorio.exe",
             "preLaunchTask": "make",
-            "hookData": true
+            "hookData": true,
+            "adjustMods": {
+                "rusty-locale": true,
+                "base": true,
+                "HighlyDerivative": true,
+                "Test mod": true
+            },
+            "useInstrumentMode": true,
+            "keepOldLog": true,
+            "modsPath": "C:\\Users\\Martin Rudat\\AppData\\Roaming\\Factorio\\mods"
+        },
+        {
+            "type": "factoriomod",
+            "request": "launch",
+            "name": "Not Highly Derivative",
+            "factorioPath": "C:\\Program Files\\Factorio\\bin\\x64\\factorio.exe",
+            "preLaunchTask": "make",
+            "hookData": true,
+            "adjustMods": {
+                "rusty-locale": true,
+                "base": true,
+                "HighlyDerivative": false,
+                "Test mod": true
+            },
+            "useInstrumentMode": true,
+            "keepOldLog": true,
+            "modsPath": "C:\\Users\\Martin Rudat\\AppData\\Roaming\\Factorio\\mods"
         }
     ]
 }

@@ -6,6 +6,7 @@ Date: TBA
     - Add integration with 'Highly Derivative'
     - Change OR-Nodes to cost no science-packs and a single tick to research.
     - Add AND-Nodes
+    - Add support for depending on the ability to extract resources.
 
 ---------------------------------------------------------------------------------------------------
 Version: 0.0.3

@@ -2,6 +2,7 @@
 
 # commands
 LUAC := luac
+PERL := perl
 LUACHECK := luacheck
 ZIP := zip -r
 GIT := git
@@ -102,6 +103,9 @@ $(OUTPUT_DIR)/%.json: %.json info.mk
 $(OUTPUT_DIR)/%.lua: %.lua info.mk
 	sed $(SED_EXPRS) $< > $@
 	$(LUAC) -p $@
+
+library.lua: mangle.pl
+	$(PERL) mangle.pl $@
 
 build/test/%: test/%
 	cp $< $@

@@ -17,7 +17,7 @@ local function make_name(type)
   end
   name_counter[type] = count
   -- don't end with a number so that we don't look like infinite technology?
-  return 'OR-Nodes-test-' .. type .. '-' .. count .. '-'
+  return 'Test Mod-' .. type .. '-' .. count .. '-'
 end
 
 local function pad_name(name, target_length)
@@ -164,11 +164,17 @@ local ok, result, message
 
 log('--- tests for single items')
 
+log('depend on mining a fluid')
+result = ORNodes.depend_on_item("crude-oil", "fluid")
+logt(result)
+assert(type(result) == 'table')
+assert(result[1] == 'oil-processing')
+
 log('new technology required to depend on roboport')
 result = ORNodes.depend_on_item("roboport")
 logt(result)
 assert(type(result) == 'table')
-assert(result[1] == 'OR-Nodes-or-item-item-roboport')
+assert(result[1] == 'OR-Nodes-or-items-item-roboport')
 
 log('no technology returned, as iron-gear-wheel is unlocked from the start')
 result = ORNodes.depend_on_item("iron-gear-wheel")
@@ -215,7 +221,7 @@ log('new technology required to depend on roboport')
 result = ORNodes.depend_on_any_item({"roboport"})
 logt(result)
 assert(type(result) == 'table')
-assert(result[1] == 'OR-Nodes-or-item-item-roboport')
+assert(result[1] == 'OR-Nodes-or-items-item-roboport')
 
 log('no technology returned, as iron-gear-wheel is unlocked from the start')
 result = ORNodes.depend_on_any_item({"iron-gear-wheel"})
@@ -368,7 +374,7 @@ log('depend on recipe ingredients where at both require different research')
 result = ORNodes.depend_on_all_recipe_ingredients(all_recipe_ingredients.both_ingredients_require_research,true)
 logt(result)
 assert(type(result) == 'table')
-assert(result[1] == 'OR-Nodes-and-recipe-OR-Nodes-test-recipe-3-')
+assert(result[1] == 'OR-Nodes-and-recipe-Test Mod-recipe-3-')
 
 data.raw.recipe[all_recipe_ingredients.both_ingredients_require_research].enabled = false
 
