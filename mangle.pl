@@ -74,11 +74,11 @@ EOF
     return report_error(is_silent, levels, "Please supply a list of ${thing} names.")
   end
 
-  local target_names = {}
 EOF
     if ($all) {
       print <<EOF;
   local found_technology_names = {}
+  local seen = {}
 EOF
     } else {
       print <<EOF;
@@ -86,7 +86,6 @@ EOF
 EOF
     }
     print <<EOF;
-  local icons = {}
   local names = {}
   local has_${things} = false
 
@@ -95,7 +94,8 @@ EOF
       ${thing}_name = difficulties
       difficulties = 3 --[[DIFFICULTIES_BOTH]]
     end
-    if band(difficulties, 3 --[[DIFFICULTIES_MASK]]) == 0 then goto next_${thing} end
+    difficulties =  band(difficulties, 3 --[[DIFFICULTIES_MASK]])
+    if difficulties == 0 then goto next_${thing} end
 EOF
     if ($thing eq 'item') {
       print <<EOF;
@@ -139,22 +139,28 @@ EOF
 EOF
       if ($thing eq 'item') {
         print <<EOF;
-    local target_name = ingredient_type .. '-' .. ingredient_name
+    local order = ingredient_name .. '-' .. ingredient_type
 EOF
       } else {
         print <<EOF;
-    local target_name = ${thing}_name
+    local order = ${thing}_name
 EOF
       }
       print <<EOF;
-    local icon = icons_of(${thing})
-    local name = locale_of(${thing})
+    local name = seen[order]
+    if not name then
+      name = {
+        order = order,
+        icon = icons_of(${thing}),
+        name = locale_of(${thing})
+      }
+      seen[order] = name
+    end
 EOF
       unless ($thing eq 'technology') {
         print <<EOF;
     local technology = foobarbaz(
       {
-        target_name = target_name,
         name_type = '${thing}',
         ${thing}_names = {
 EOF
@@ -164,13 +170,12 @@ EOF
 EOF
         } else {
         print <<EOF;
-          [recipe_name] = 3 --[[DIFFICULTY_BOTH]]
+          [recipe_name] = bor(get_recipe_enabled_flags(recipe), difficulties)
 EOF
         }
         print <<EOF;
         },
-        icon = icon,
-        name = name,
+        name = name
       },
       levels,
       is_silent
@@ -179,17 +184,8 @@ EOF
 EOF
       }
       print <<EOF;
-    if band(difficulties, 3) == 1 --[[DIFFICULTY_NORMAL]] then
-      target_name = target_name .. '-normal'
-    elseif band(difficulties, 3) == 2 --[[DIFFICULTY_EXPENSIVE]] then
-      target_name = target_name .. '-expensive'
-    else -- DIFFICULTY_BOTH
-      target_name = target_name
-    end
-    if not names[target_name] then
-      target_names[#target_names + 1] = target_name
-      names[target_name] = name
-      icons[target_name] = icon
+    if not names[order] then
+      names[order] = name
     end
 
 EOF
@@ -208,18 +204,20 @@ EOF
 EOF
       if ($thing eq 'item') {
         print <<EOF;
-    local target_name = ingredient_type .. '-' .. ingredient_name
+    local order = ingredient_name .. '-' .. ingredient_type
 EOF
       } else {
         print <<EOF;
-    local target_name = ${thing}_name
+    local order = ${thing}_name
 EOF
       }
       print <<EOF;
-    if not names[target_name] then
-      target_names[#target_names + 1] = target_name
-      icons[target_name] = icons_of(${thing})
-      names[target_name] = locale_of(${thing})
+    if not names[order] then
+      names[order] = {
+        order = order,
+        name = locale_of(${thing}),
+        icon = icons_of(${thing})
+      }
     end
 EOF
       if ($thing eq 'recipe') {
@@ -250,24 +248,12 @@ EOF
 EOF
     if(!$all) {
       print <<EOF;
-  if #target_names == 0 then
+  if not next(names) then
     return report_error(is_silent, levels, 'None of the ${things} were found.')
   end
 
 EOF
     }
-    print <<EOF;
-  table.sort(target_names)
-
-  for i = 1,#target_names do
-    local target_name = target_names[i]
-    icons[i] = icons[target_name]
-    names[i] = names[target_name]
-    icons[target_name] = nil
-    names[target_name] = nil
-  end
-
-EOF
     if ($all) {
       print <<EOF;
   return foobarbaz_and(
@@ -279,8 +265,7 @@ EOF
     }
       print <<EOF;
     {
-      target_name = table.concat(target_names, '-${andor}-'),
-      name_type = '${things}',
+      name_type = '${thing}',
 EOF
     if ($all) {
       print <<EOF;
@@ -293,7 +278,6 @@ EOF
 EOF
     }
       print <<EOF;
-      icons = icons,
       names = names
     },
     levels,

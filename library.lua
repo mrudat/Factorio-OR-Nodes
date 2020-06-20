@@ -27,6 +27,12 @@ end
 local locale_of = rusty_locale.of
 local icons_of = rusty_icons.of
 local find_prototype = rusty_prototypes.find
+local index_technology
+if HighlyDerivative then
+  index_technology = HighlyDerivative.index
+else
+  index_technology = function(_) end
+end
 
 local bor = bit32.bor
 local band = bit32.band
@@ -44,17 +50,14 @@ local MOD_NAME = "OR-Nodes"
 local PREFIX_OR = MOD_NAME .. "-or-"
 local PREFIX_AND = MOD_NAME .. "-and-"
 local MOD_PATH = "__" .. MOD_NAME .. "__/"
--- local GRAPHICS_PATH = ("__%s__/graphics/"):format(MOD_NAME)
-local OR_ICON = MOD_PATH .. "thumbnail.png"
--- TODO create icon.
---local AND_ICON = MOD_PATH .. "graphics/and.png"
+local GRAPHICS_PATH = MOD_PATH .. "graphics/"
+local OR_ICON = GRAPHICS_PATH .. "OR.png"
 
 -- recipe flags
 F['AVAILABLE_BY_DEFAULT_MASK'] = 12 --[[AVAILABLE_BY_DEFAULT_MASK]]
 F['AVAILABLE_BY_DEFAULT_EXPENSIVE'] = 8 --[[AVAILABLE_BY_DEFAULT_EXPENSIVE]]
 F['AVAILABLE_BY_DEFAULT_NORMAL'] = 4 --[[AVAILABLE_BY_DEFAULT_NORMAL]]
 F['AVAILABLE_BY_DEFAULT_BOTH'] = 12 --[[AVAILABLE_BY_DEFAULT_BOTH]]
-
 
 -- difficulty 'constants'
 F['DIFFICULTY_EXPENSIVE'] = 2 --[[DIFFICULTY_EXPENSIVE]]
@@ -69,17 +72,15 @@ F['DIFFICULTY_MASK'] = 3 --[[DIFFICULTY_MASK]]
 --------------------------------------------------------------------------------
 -- package variables
 
-F.recipe_name_to_technology_names = {}
-F.technology_name_to_dependent_technology_names = {}
-F.technology_name_to_prerequisite_technology_names = {}
-F.drill_index = {}
-F.drill_placeable_by = {}
-F.items_that_place = {}
-F.recipe_index = {}
-F.resource_data_by_type_and_item = {}
-F.new_technologies = {}
-F.unnamed_or_node_count = 1
-F.unnamed_and_node_count = 1
+F._recipe_name_to_technology_names = {}
+F._technology_name_to_dependent_technology_names = {}
+F._technology_name_to_prerequisite_technology_names = {}
+F._drill_index = {}
+F._drill_placeable_by = {}
+F._items_that_place = {}
+F._recipe_index = {}
+F._resource_data_by_type_and_item = {}
+F._created_technologies_by_name = {}
 
 
 
@@ -110,7 +111,7 @@ local function report_error(is_silent, levels, message)
     log(message)
     return nil
   else
-    error(message, levels + 1)
+    error(message, levels)
   end
 end
 
@@ -126,7 +127,7 @@ local function collect_items_to_mine_item(item_names, item, difficulties)
   local item_type = item.type
   if item_type ~= 'item' then item_type = 'fluid' end
 
-  local resource_data_by_item = F.resource_data_by_type_and_item[item_type]
+  local resource_data_by_item = F._resource_data_by_type_and_item[item_type]
   if not resource_data_by_item then return end
 
   local item_name = item.name
@@ -134,7 +135,7 @@ local function collect_items_to_mine_item(item_names, item, difficulties)
   local resource_data_by_resource_name = resource_data_by_item[item_name]
   if not resource_data_by_resource_name then return end
 
-  local drill_index = F.drill_index
+  local drill_index = F._drill_index
 
   local is_fluid = item_type == 'fluid'
 
@@ -161,8 +162,8 @@ local function collect_items_to_mine_item(item_names, item, difficulties)
     end
   end
 
-  local F_drill_placeable_by = F.drill_placeable_by
-  local F_items_that_place = F.items_that_place
+  local F_drill_placeable_by = F._drill_placeable_by
+  local F_items_that_place = F._items_that_place
 
   local found_items = {}
 
@@ -193,7 +194,7 @@ local function collect_items_to_mine_item(item_names, item, difficulties)
 end
 
 local function register_new_item(item, item_name, _, is_refresh)
-  local F_items_that_place = F.items_that_place
+  local F_items_that_place = F._items_that_place
   if is_refresh then
     for _, items in pairs(F_items_that_place) do
       items[item_name] = nil
@@ -207,18 +208,18 @@ end
 
 local function register_new_mining_drill(mining_drill, mining_drill_name, _, is_refresh)
   if is_refresh then
-    for _, drills in pairs(F.drill_index) do
+    for _, drills in pairs(F._drill_index) do
       drills[mining_drill_name] = nil
     end
-    F.drill_placeable_by[mining_drill_name] = nil
+    F._drill_placeable_by[mining_drill_name] = nil
   end
 
   local placeable_by = mining_drill.placeable_by
   if placeable_by then
     if type(placeable_by) == 'string' then
-      F.drill_placeable_by[mining_drill_name] = { placeable_by }
+      F._drill_placeable_by[mining_drill_name] = { placeable_by }
     else
-      F.drill_placeable_by[mining_drill_name] = placeable_by
+      F._drill_placeable_by[mining_drill_name] = placeable_by
     end
   end
 
@@ -245,12 +246,12 @@ local function register_new_mining_drill(mining_drill, mining_drill_name, _, is_
   local resource_categories = mining_drill.resource_categories
   for i = 1,#resource_categories do
     local resource_category_name = resource_categories[i]
-    autovivify(F.drill_index, resource_category_name)[mining_drill_name] = mining_drill_data
+    autovivify(F._drill_index, resource_category_name)[mining_drill_name] = mining_drill_data
   end
 end
 
 local function register_new_resource(resource, resource_name, _, is_refresh)
-  local F_resource_data_by_type_and_item = F.resource_data_by_type_and_item
+  local F_resource_data_by_type_and_item = F._resource_data_by_type_and_item
   if is_refresh then
     for _, type_data in pairs(F_resource_data_by_type_and_item) do
       for _, resource_data in pairs(type_data) do
@@ -285,9 +286,9 @@ local function register_new_resource(resource, resource_name, _, is_refresh)
 end
 
 local function catalog_technology(technology_name, technology_data, flags)
-  local recipe_name_to_technology_names = F.recipe_name_to_technology_names
-  local technology_name_to_dependent_technology_names = F.technology_name_to_dependent_technology_names
-  local technology_name_to_prerequisite_technology_names = F.technology_name_to_prerequisite_technology_names
+  local recipe_name_to_technology_names = F._recipe_name_to_technology_names
+  local technology_name_to_dependent_technology_names = F._technology_name_to_dependent_technology_names
+  local technology_name_to_prerequisite_technology_names = F._technology_name_to_prerequisite_technology_names
   local effects = technology_data.effects
   if effects then
     for _,effect in ipairs(effects) do
@@ -312,10 +313,10 @@ end
 local function register_new_technology(technology, technology_name, _, is_refresh)
   if technology_name:sub(1,9) == 'OR-Nodes-' then return end
   if is_refresh then
-    for _, technology_names in pairs(F.recipe_name_to_technology_names) do
+    for _, technology_names in pairs(F._recipe_name_to_technology_names) do
       technology_names[technology_name] = nil
     end
-    for _, technology_names in pairs(F.technology_name_to_dependent_technology_names) do
+    for _, technology_names in pairs(F._technology_name_to_dependent_technology_names) do
       technology_names[technology_name] = nil
     end
   end
@@ -337,7 +338,7 @@ local function register_new_technology(technology, technology_name, _, is_refres
 end
 
 local function collect_technologies_for_recipe(technology_names, recipe_name, recipe_flags)
-  local recipe_data = F.recipe_name_to_technology_names[recipe_name]
+  local recipe_data = F._recipe_name_to_technology_names[recipe_name]
   if not recipe_data then return false end
 
   for technology_name, flags in pairs(recipe_data) do
@@ -352,7 +353,7 @@ tree: a -> b -> c
 output dependency: c
 ]]
 local function simplify_technologies(technology_set)
-  local technology_name_to_dependent_technology_names = F.technology_name_to_dependent_technology_names
+  local technology_name_to_dependent_technology_names = F._technology_name_to_dependent_technology_names
   for base_technology_name, base_difficulties in pairs(table.deepcopy(technology_set)) do
     local queue = { { base_technology_name, base_difficulties } }
     local seen = {}
@@ -390,10 +391,8 @@ input dependency: a & c
 tree: a -> b -> c
 output dependency: a
 ]]
-local simplify_technologies2_done = nil -- TODO
 local function simplify_technologies2(technology_set)
-  if not simplify_technologies2_done then return end
-  local technology_name_to_prerequisite_technology_names = F.technology_name_to_prerequisite_technology_names
+  local technology_name_to_prerequisite_technology_names = F._technology_name_to_prerequisite_technology_names
   for base_technology_name, base_difficulties in pairs(table.deepcopy(technology_set)) do
     local queue = { { base_technology_name, base_difficulties } }
     local seen = {}
@@ -427,7 +426,7 @@ local function simplify_technologies2(technology_set)
 end
 
 local function catalog_result(recipe_name, ingredient_name, ingredient_type, recipe_flags)
-  local recipe_index = F.recipe_index
+  local recipe_index = F._recipe_index
   local type_data = autovivify(recipe_index,ingredient_type)
   local ingredient_data = autovivify(type_data,ingredient_name)
   ingredient_data[recipe_name] = bor(ingredient_data[recipe_name] or 0, recipe_flags)
@@ -460,7 +459,7 @@ end
 
 local function register_new_recipe(recipe, recipe_name, _, is_refresh)
   if is_refresh then
-    for _, type_data in pairs(F.recipe_index) do
+    for _, type_data in pairs(F._recipe_index) do
       for _, ingredient_data in pairs(type_data) do
         ingredient_data[recipe_name] = nil
       end
@@ -497,7 +496,7 @@ local function collect_recipes_for_item(recipes, item, difficulties)
   if item_type ~= 'fluid' then
     item_type = 'item'
   end
-  local type_data = F.recipe_index[item_type]
+  local type_data = F._recipe_index[item_type]
   if not type_data then return end
   local item_data = type_data[item_name]
   if not item_data then return end
@@ -585,25 +584,50 @@ local function get_recipe_enabled_flags(recipe)
   end
 end
 
-local function compose_icons(icons)
-  local temp = {
-    {
-      icon = OR_ICON,
-      icon_size = 128,
-    }
-  }
-  local scale = 1 / (#icons)
-  local scale4 = 4 * scale
-  local offset = (64 * scale) - 64
-  for i,source_icons in ipairs(icons) do
-    temp = util.combine_icons(
-      temp,
-      source_icons,
+local function compose_icons(icons, and_mode)
+  local icon_count = #icons
+  local temp
+  if and_mode then
+    temp = {
       {
-        scale = scale4,
-        shift = { offset, (((i - 0.5) * scale) * 128) - 64 }
+        icon = '__core__/graphics/empty.png',
+        icon_size = 1,
+        scale = 128
       }
-    )
+    }
+  else
+    temp = {
+      {
+        icon = OR_ICON,
+        icon_size = 128,
+      }
+    }
+  end
+  local columns = math.ceil(math.sqrt(icon_count))
+  local rows = math.ceil(icon_count / columns)
+  local col_scale = 1 / columns
+  local row_scale = 1 / rows
+  local icon_scale = 4 * col_scale
+  local i = 0
+  for row = 1,rows do
+    if row == rows then
+      columns = icon_count - i
+      col_scale = 1 / columns
+    end
+    for col = 1,columns do
+      i = i + 1
+      temp = util.combine_icons(
+        temp,
+        icons[i],
+        {
+          scale = icon_scale,
+          shift = {
+            (((col - 0.5) * col_scale) * 128) - 64,
+            (((row - 0.5) * row_scale) * 128) - 64
+          }
+        }
+      )
+    end
   end
   return temp
 end
@@ -705,97 +729,151 @@ end
 
 
 
-
-
 ------------------------------------------------------------------------
 -- Actual technology creation.
 
-local function create_or_node(node_data, _, _)
-  local new_technologies = F.new_technologies
-  local target_name = node_data.target_name
-  local old_technology = new_technologies[target_name]
-  if old_technology then return { old_technology } end
+local function compare_order(a,b)
+  return a.order < b.order
+end
 
-  local name_type = node_data.name_type
-
+local function create_or_node(node_data, _ --[[levels]], is_silent)
+  --levels = levels + 1
   local mode = node_data.mode
   local and_mode = false
   if mode and mode == 'and' then and_mode = true end
 
-  local short_tech_name
+  local technology_names = node_data.technology_names
+  local technology_name = serpent.line(technology_names)
   if and_mode then
-    short_tech_name = derive_name(PREFIX_AND, name_type, target_name)
+    technology_name = derive_name(PREFIX_AND, technology_name)
   else
-    short_tech_name = derive_name(PREFIX_OR, name_type, target_name)
+    technology_name = derive_name(PREFIX_OR, technology_name)
   end
-  new_technologies[target_name] = short_tech_name
 
-  local icons = node_data.icons
-  local icon = node_data.icon
+  local created_technologies_by_name = F._created_technologies_by_name
+  local name_data_by_type = autovivify(created_technologies_by_name, technology_name)
+  local technology_is_new = not name_data_by_type.old
 
-  -- TODO AND_ICON
-  if icons then
-    icons = compose_icons(icons)
-  elseif icon then
-    icons = icon
-  else
-    icons = {
-      {
-        icon = OR_ICON,
-        icon_size = 128,
-      }
+  local name_type = node_data.name_type
+  local name_data = name_data_by_type[name_type]
+  if not name_data then
+    name_data = {
+      seen = {}
     }
+    name_data_by_type[name_type] = name_data
   end
+  local seen = name_data.seen
 
+  local needs_sort
   local names = node_data.names
-  local name = node_data.name
-  if names and #names == 1 then
-    name = names[1]
+  if names then
+    for order, name in pairs(names) do
+      if not seen[order] then
+        seen[order] = name
+        name_data[#name_data+1] = name
+        needs_sort = true
+      end
+    end
+  else
+    local name = node_data.name
+    if name then
+      local order = name.order
+      if not seen[order] then
+        seen[order] = name
+        name_data[#name_data+1] = name
+        needs_sort = true
+      end
+    end
   end
 
+  if needs_sort then
+    table.sort(name_data, compare_order)
+  end
+
+  do
+    local recipe = name_data_by_type.recipe
+    if recipe then
+      name_data = recipe
+      name_type = 'recipes'
+    else
+      local item = name_data_by_type.item
+      if item then
+        name_data = item
+        name_type = 'items'
+      else
+        local technology = name_data_by_type.technology
+        if technology then
+          name_type = 'technology'
+          name_data = technology
+        else
+          return report_error(is_silent, 1, "Shouldn't happen")
+        end
+      end
+    end
+  end
+
+  local name_count = #name_data
+
+  local icons
   local localised_name
   local localised_description
 
-  if name then
-    localised_name = name.name
+  if name_count == 1 then
+    local foo = name_data[1]
+    icons = foo.icon
+    localised_name = foo.name.name
     if name_type == 'items' then
       localised_description = {"OR-Nodes-description.item-craftable", localised_name}
     elseif name_type == 'recipes' then
       localised_description = {"OR-Nodes-description.recipe-craftable", localised_name}
-    end
-  elseif names then
-    if and_mode then
-      localised_name = {"OR-Nodes-name.and-node-name", F.unnamed_and_node_count}
-      F.unnamed_and_node_count = F.unnamed_and_node_count + 1
     else
-      localised_name = {"OR-Nodes-name.node-name", F.unnamed_or_node_count}
-      F.unnamed_or_node_count = F.unnamed_or_node_count + 1
+      return report_error(is_silent, 1, "Shouldn't happen")
     end
-    localised_description = compose_names(names, and_mode)
+  elseif name_count > 1 then
+    local icon_list = {}
+    local name_list = {}
+    for i = 1,name_count do
+      local name = name_data[i]
+      icon_list[i] = name.icon
+      name_list[i] = name.name
+    end
+    icons = compose_icons(icon_list, and_mode)
+    localised_name = compose_names(name_list, and_mode)
     if name_type == 'items' then
       if and_mode then
-        localised_description = {"OR-Nodes-description.items-all-craftable", localised_description}
+        localised_description = {"OR-Nodes-description.items-all-craftable", localised_name}
       else
-        localised_description = {"OR-Nodes-description.items-craftable", localised_description}
+        localised_description = {"OR-Nodes-description.items-craftable", localised_name}
       end
     elseif name_type == 'recipes' then
       if and_mode then
-        localised_description = {"OR-Nodes-description.recipes-all-craftable", localised_description}
+        localised_description = {"OR-Nodes-description.recipes-all-craftable", localised_name}
       else
-        localised_description = {"OR-Nodes-description.recipes-craftable", localised_description}
+        localised_description = {"OR-Nodes-description.recipes-craftable", localised_name}
       end
-    elseif name_type == 'technologies' then
+    elseif name_type == 'technology' then
       if and_mode then
-        localised_description = {"OR-Nodes-description.technologies-all-researched", localised_description}
+        localised_description = {"OR-Nodes-description.technologies-all-researched", localised_name}
       else
-        localised_description = {"OR-Nodes-description.technologies-researched", localised_description}
+        localised_description = {"OR-Nodes-description.technologies-researched", localised_name}
       end
     end
+  else
+    return report_error(is_silent, 1, "Shouldn't happen")
+  end
+
+  if not technology_is_new then
+    local technology = data.raw.technology[technology_name]
+    technology.icons = icons
+    technology.localised_name = localised_name
+    technology.localised_description = localised_description
+    index_technology(technology)
+    return { technology_name }
   end
 
   local technology = {
     type = "technology",
-    name = short_tech_name,
+    name = technology_name,
     icons = icons,
     localised_name = localised_name,
     localised_description = localised_description,
@@ -811,26 +889,24 @@ local function create_or_node(node_data, _, _)
     prerequisites = nil
   }
 
-  local technology_names = node_data.technology_names
-
   local prerequisites = {}
   local normal_prerequisites = {}
   local expensive_prerequisites = {}
 
-  for technology_name, difficulties in pairs(technology_names) do
+  for prerequisite_name, difficulties in pairs(technology_names) do
     if band(difficulties,3 --[[DIFFICULTY_BOTH]]) == 3 --[[DIFFICULTY_BOTH]] then
-      prerequisites[#prerequisites+1] = technology_name
+      prerequisites[#prerequisites+1] = prerequisite_name
     elseif band(difficulties,1 --[[DIFFICULTY_NORMAL]]) == 1 --[[DIFFICULTY_NORMAL]] then
-      normal_prerequisites[#normal_prerequisites+1] = technology_name
+      normal_prerequisites[#normal_prerequisites+1] = prerequisite_name
     elseif band(difficulties,2 --[[DIFFICULTY_EXPENSIVE]]) == 2 --[[DIFFICULTY_EXPENSIVE]] then
-      expensive_prerequisites[#expensive_prerequisites+1] = technology_name
+      expensive_prerequisites[#expensive_prerequisites+1] = prerequisite_name
     end
   end
 
   if next(normal_prerequisites) or next(expensive_prerequisites) then
-    for _, technology_name in pairs(prerequisites) do
-      normal_prerequisites[#normal_prerequisites+1] = technology_name
-      expensive_prerequisites[#expensive_prerequisites+1] = technology_name
+    for _, prerequisite_name in pairs(prerequisites) do
+      normal_prerequisites[#normal_prerequisites+1] = prerequisite_name
+      expensive_prerequisites[#expensive_prerequisites+1] = prerequisite_name
     end
     if not next(normal_prerequisites) then
       technology_data.prerequisites = expensive_prerequisites
@@ -853,13 +929,12 @@ local function create_or_node(node_data, _, _)
     technology.normal = technology_data
   end
 
-  log(serpent.block(technology))
-
   data:extend{ technology }
+  name_data_by_type.old = true
 
-  if HighlyDerivative then HighlyDerivative.index(technology) end
+  index_technology(technology)
 
-  return { short_tech_name }
+  return { technology_name }
 end
 
 
@@ -879,7 +954,6 @@ local function foobarbaz(node_data, levels, is_silent)
     local items_to_mine = {}
     while next(items) do
       for item, difficulties in pairs (items) do
-        --if item_can_be_mined_from_start(item) then return {} end
         collect_recipes_for_item(recipe_names, item, difficulties)
         collect_items_to_mine_item(items_to_mine, item, difficulties)
       end
@@ -900,6 +974,11 @@ local function foobarbaz(node_data, levels, is_silent)
     end
     collect_technologies_for_recipe(technology_names, recipe_name, recipe_flags)
   end
+
+  if next(recipe_names) and not next(technology_names) then
+    return report_error(is_silent, levels + 1, 'No required recipes were unlocked by any technologies.')
+  end
+
 
   simplify_technologies(technology_names)
 
@@ -1017,13 +1096,15 @@ function F.depend_on_all_recipe_ingredients(recipe, is_silent)
       end
       local technology = foobarbaz(
         {
-          target_name = ingredient_type .. '-' .. ingredient_name,
           name_type = 'item',
           item_names = {
             [item] = 3
           },
-          icon = icons_of(item),
-          name = locale_of(item),
+          name = {
+            order = ingredient_name .. '.' .. ingredient_type,
+            icon = icons_of(item),
+            name = locale_of(item)
+          }
         },
         levels,
         is_silent
@@ -1044,11 +1125,13 @@ function F.depend_on_all_recipe_ingredients(recipe, is_silent)
   if next(found_technology_names, technology_name) then
     return foobarbaz_and(
       {
-        target_name = recipe_name,
         name_type = 'recipe',
         technology_names = found_technology_names,
-        name = locale_of(recipe),
-        icon = icons_of(recipe),
+        name = {
+          order = recipe_name,
+          name = locale_of(recipe),
+          icon = icons_of(recipe),
+        },
         mode = 'and'
       },
       1,
@@ -1069,9 +1152,8 @@ function F.depend_on_all_technologies(technology_names, is_silent)
     return report_error(is_silent, levels, "Please supply a list of technology names.")
   end
 
-  local target_names = {}
   local found_technology_names = {}
-  local icons = {}
+  local seen = {}
   local names = {}
   local has_technologies = false
 
@@ -1080,7 +1162,8 @@ function F.depend_on_all_technologies(technology_names, is_silent)
       technology_name = difficulties
       difficulties = 3 --[[DIFFICULTIES_BOTH]]
     end
-    if band(difficulties, 3 --[[DIFFICULTIES_MASK]]) == 0 then goto next_technology end
+    difficulties =  band(difficulties, 3 --[[DIFFICULTIES_MASK]])
+    if difficulties == 0 then goto next_technology end
     if not type(technology_name) == 'string' then
       return report_error(is_silent, levels, "One of the supplied technology names was not a string")
     end
@@ -1089,20 +1172,18 @@ function F.depend_on_all_technologies(technology_names, is_silent)
     if not technology then
       return report_error(is_silent, levels, 'One of the technologies was not found.')
     end
-    local target_name = technology_name
-    local icon = icons_of(technology)
-    local name = locale_of(technology)
-    if band(difficulties, 3) == 1 --[[DIFFICULTY_NORMAL]] then
-      target_name = target_name .. '-normal'
-    elseif band(difficulties, 3) == 2 --[[DIFFICULTY_EXPENSIVE]] then
-      target_name = target_name .. '-expensive'
-    else -- DIFFICULTY_BOTH
-      target_name = target_name
+    local order = technology_name
+    local name = seen[order]
+    if not name then
+      name = {
+        order = order,
+        icon = icons_of(technology),
+        name = locale_of(technology)
+      }
+      seen[order] = name
     end
-    if not names[target_name] then
-      target_names[#target_names + 1] = target_name
-      names[target_name] = name
-      icons[target_name] = icon
+    if not names[order] then
+      names[order] = name
     end
 
     if not technology_name then goto next_technology end
@@ -1112,23 +1193,11 @@ function F.depend_on_all_technologies(technology_names, is_silent)
 
   if not has_technologies then return {} end
 
-  table.sort(target_names)
-
-  for i = 1,#target_names do
-    local target_name = target_names[i]
-    icons[i] = icons[target_name]
-    names[i] = names[target_name]
-    icons[target_name] = nil
-    names[target_name] = nil
-  end
-
   return foobarbaz_and(
     {
-      target_name = table.concat(target_names, '-and-'),
-      name_type = 'technologies',
+      name_type = 'technology',
       technology_names = found_technology_names,
       mode = 'and',
-      icons = icons,
       names = names
     },
     levels,
@@ -1142,9 +1211,7 @@ function F.depend_on_any_technology(technology_names, is_silent)
     return report_error(is_silent, levels, "Please supply a list of technology names.")
   end
 
-  local target_names = {}
   local found_technology_names = {}
-  local icons = {}
   local names = {}
   local has_technologies = false
 
@@ -1153,18 +1220,21 @@ function F.depend_on_any_technology(technology_names, is_silent)
       technology_name = difficulties
       difficulties = 3 --[[DIFFICULTIES_BOTH]]
     end
-    if band(difficulties, 3 --[[DIFFICULTIES_MASK]]) == 0 then goto next_technology end
+    difficulties =  band(difficulties, 3 --[[DIFFICULTIES_MASK]])
+    if difficulties == 0 then goto next_technology end
     if not type(technology_name) == 'string' then
       return report_error(is_silent, levels, "One of the supplied technology names was not a string")
     end
     has_technologies = true
     local technology = find_prototype(technology_name, 'technology', true)
     if not technology then goto next_technology end
-    local target_name = technology_name
-    if not names[target_name] then
-      target_names[#target_names + 1] = target_name
-      icons[target_name] = icons_of(technology)
-      names[target_name] = locale_of(technology)
+    local order = technology_name
+    if not names[order] then
+      names[order] = {
+        order = order,
+        name = locale_of(technology),
+        icon = icons_of(technology)
+      }
     end
     found_technology_names[technology_name] = bor(found_technology_names[technology_name] or 0,
       band(get_technology_enabled_flags(technology), difficulties)
@@ -1174,26 +1244,14 @@ function F.depend_on_any_technology(technology_names, is_silent)
 
   if not has_technologies then return {} end
 
-  if #target_names == 0 then
+  if not next(names) then
     return report_error(is_silent, levels, 'None of the technologies were found.')
-  end
-
-  table.sort(target_names)
-
-  for i = 1,#target_names do
-    local target_name = target_names[i]
-    icons[i] = icons[target_name]
-    names[i] = names[target_name]
-    icons[target_name] = nil
-    names[target_name] = nil
   end
 
   return foobarbaz(
     {
-      target_name = table.concat(target_names, '-or-'),
-      name_type = 'technologies',
+      name_type = 'technology',
       technology_names = found_technology_names,
-      icons = icons,
       names = names
     },
     levels,
@@ -1207,9 +1265,8 @@ function F.depend_on_all_recipes(recipe_names, is_silent)
     return report_error(is_silent, levels, "Please supply a list of recipe names.")
   end
 
-  local target_names = {}
   local found_technology_names = {}
-  local icons = {}
+  local seen = {}
   local names = {}
   local has_recipes = false
 
@@ -1218,7 +1275,8 @@ function F.depend_on_all_recipes(recipe_names, is_silent)
       recipe_name = difficulties
       difficulties = 3 --[[DIFFICULTIES_BOTH]]
     end
-    if band(difficulties, 3 --[[DIFFICULTIES_MASK]]) == 0 then goto next_recipe end
+    difficulties =  band(difficulties, 3 --[[DIFFICULTIES_MASK]])
+    if difficulties == 0 then goto next_recipe end
     if not type(recipe_name) == 'string' then
       return report_error(is_silent, levels, "One of the supplied recipe names was not a string")
     end
@@ -1227,34 +1285,30 @@ function F.depend_on_all_recipes(recipe_names, is_silent)
     if not recipe then
       return report_error(is_silent, levels, 'One of the recipes was not found.')
     end
-    local target_name = recipe_name
-    local icon = icons_of(recipe)
-    local name = locale_of(recipe)
+    local order = recipe_name
+    local name = seen[order]
+    if not name then
+      name = {
+        order = order,
+        icon = icons_of(recipe),
+        name = locale_of(recipe)
+      }
+      seen[order] = name
+    end
     local technology = foobarbaz(
       {
-        target_name = target_name,
         name_type = 'recipe',
         recipe_names = {
-          [recipe_name] = 3 --[[DIFFICULTY_BOTH]]
+          [recipe_name] = bor(get_recipe_enabled_flags(recipe), difficulties)
         },
-        icon = icon,
-        name = name,
+        name = name
       },
       levels,
       is_silent
     )
     if not technology then return nil end
-    if band(difficulties, 3) == 1 --[[DIFFICULTY_NORMAL]] then
-      target_name = target_name .. '-normal'
-    elseif band(difficulties, 3) == 2 --[[DIFFICULTY_EXPENSIVE]] then
-      target_name = target_name .. '-expensive'
-    else -- DIFFICULTY_BOTH
-      target_name = target_name
-    end
-    if not names[target_name] then
-      target_names[#target_names + 1] = target_name
-      names[target_name] = name
-      icons[target_name] = icon
+    if not names[order] then
+      names[order] = name
     end
 
     local technology_name = technology[1]
@@ -1265,23 +1319,11 @@ function F.depend_on_all_recipes(recipe_names, is_silent)
 
   if not has_recipes then return {} end
 
-  table.sort(target_names)
-
-  for i = 1,#target_names do
-    local target_name = target_names[i]
-    icons[i] = icons[target_name]
-    names[i] = names[target_name]
-    icons[target_name] = nil
-    names[target_name] = nil
-  end
-
   return foobarbaz_and(
     {
-      target_name = table.concat(target_names, '-and-'),
-      name_type = 'recipes',
+      name_type = 'recipe',
       technology_names = found_technology_names,
       mode = 'and',
-      icons = icons,
       names = names
     },
     levels,
@@ -1295,9 +1337,7 @@ local function _depend_on_any_recipe(recipe_names, is_silent, levels)
     return report_error(is_silent, levels, "Please supply a list of recipe names.")
   end
 
-  local target_names = {}
   local found_recipe_names = {}
-  local icons = {}
   local names = {}
   local has_recipes = false
 
@@ -1306,18 +1346,21 @@ local function _depend_on_any_recipe(recipe_names, is_silent, levels)
       recipe_name = difficulties
       difficulties = 3 --[[DIFFICULTIES_BOTH]]
     end
-    if band(difficulties, 3 --[[DIFFICULTIES_MASK]]) == 0 then goto next_recipe end
+    difficulties =  band(difficulties, 3 --[[DIFFICULTIES_MASK]])
+    if difficulties == 0 then goto next_recipe end
     if not type(recipe_name) == 'string' then
       return report_error(is_silent, levels, "One of the supplied recipe names was not a string")
     end
     has_recipes = true
     local recipe = find_prototype(recipe_name, 'recipe', true)
     if not recipe then goto next_recipe end
-    local target_name = recipe_name
-    if not names[target_name] then
-      target_names[#target_names + 1] = target_name
-      icons[target_name] = icons_of(recipe)
-      names[target_name] = locale_of(recipe)
+    local order = recipe_name
+    if not names[order] then
+      names[order] = {
+        order = order,
+        name = locale_of(recipe),
+        icon = icons_of(recipe)
+      }
     end
     local recipe_mask = lshift(difficulties,2)
     found_recipe_names[recipe_name] = bor(found_recipe_names[recipe_name] or 0,
@@ -1328,26 +1371,14 @@ local function _depend_on_any_recipe(recipe_names, is_silent, levels)
 
   if not has_recipes then return {} end
 
-  if #target_names == 0 then
+  if not next(names) then
     return report_error(is_silent, levels, 'None of the recipes were found.')
-  end
-
-  table.sort(target_names)
-
-  for i = 1,#target_names do
-    local target_name = target_names[i]
-    icons[i] = icons[target_name]
-    names[i] = names[target_name]
-    icons[target_name] = nil
-    names[target_name] = nil
   end
 
   return foobarbaz(
     {
-      target_name = table.concat(target_names, '-or-'),
-      name_type = 'recipes',
+      name_type = 'recipe',
       recipe_names = found_recipe_names,
-      icons = icons,
       names = names
     },
     levels,
@@ -1365,9 +1396,8 @@ function F.depend_on_all_items(item_names, is_silent)
     return report_error(is_silent, levels, "Please supply a list of item names.")
   end
 
-  local target_names = {}
   local found_technology_names = {}
-  local icons = {}
+  local seen = {}
   local names = {}
   local has_items = false
 
@@ -1376,7 +1406,8 @@ function F.depend_on_all_items(item_names, is_silent)
       item_name = difficulties
       difficulties = 3 --[[DIFFICULTIES_BOTH]]
     end
-    if band(difficulties, 3 --[[DIFFICULTIES_MASK]]) == 0 then goto next_item end
+    difficulties =  band(difficulties, 3 --[[DIFFICULTIES_MASK]])
+    if difficulties == 0 then goto next_item end
     local ingredient_data_type = type(item_name)
     local ingredient_name
     local ingredient_type
@@ -1394,34 +1425,30 @@ function F.depend_on_all_items(item_names, is_silent)
     if not item then
       return report_error(is_silent, levels, 'One of the items was not found.')
     end
-    local target_name = ingredient_type .. '-' .. ingredient_name
-    local icon = icons_of(item)
-    local name = locale_of(item)
+    local order = ingredient_name .. '-' .. ingredient_type
+    local name = seen[order]
+    if not name then
+      name = {
+        order = order,
+        icon = icons_of(item),
+        name = locale_of(item)
+      }
+      seen[order] = name
+    end
     local technology = foobarbaz(
       {
-        target_name = target_name,
         name_type = 'item',
         item_names = {
           [item] = 3 --[[DIFFICULTY_BOTH]]
         },
-        icon = icon,
-        name = name,
+        name = name
       },
       levels,
       is_silent
     )
     if not technology then return nil end
-    if band(difficulties, 3) == 1 --[[DIFFICULTY_NORMAL]] then
-      target_name = target_name .. '-normal'
-    elseif band(difficulties, 3) == 2 --[[DIFFICULTY_EXPENSIVE]] then
-      target_name = target_name .. '-expensive'
-    else -- DIFFICULTY_BOTH
-      target_name = target_name
-    end
-    if not names[target_name] then
-      target_names[#target_names + 1] = target_name
-      names[target_name] = name
-      icons[target_name] = icon
+    if not names[order] then
+      names[order] = name
     end
 
     local technology_name = technology[1]
@@ -1432,23 +1459,11 @@ function F.depend_on_all_items(item_names, is_silent)
 
   if not has_items then return {} end
 
-  table.sort(target_names)
-
-  for i = 1,#target_names do
-    local target_name = target_names[i]
-    icons[i] = icons[target_name]
-    names[i] = names[target_name]
-    icons[target_name] = nil
-    names[target_name] = nil
-  end
-
   return foobarbaz_and(
     {
-      target_name = table.concat(target_names, '-and-'),
-      name_type = 'items',
+      name_type = 'item',
       technology_names = found_technology_names,
       mode = 'and',
-      icons = icons,
       names = names
     },
     levels,
@@ -1462,9 +1477,7 @@ local function _depend_on_any_item(item_names, is_silent, levels)
     return report_error(is_silent, levels, "Please supply a list of item names.")
   end
 
-  local target_names = {}
   local found_item_names = {}
-  local icons = {}
   local names = {}
   local has_items = false
 
@@ -1473,7 +1486,8 @@ local function _depend_on_any_item(item_names, is_silent, levels)
       item_name = difficulties
       difficulties = 3 --[[DIFFICULTIES_BOTH]]
     end
-    if band(difficulties, 3 --[[DIFFICULTIES_MASK]]) == 0 then goto next_item end
+    difficulties =  band(difficulties, 3 --[[DIFFICULTIES_MASK]])
+    if difficulties == 0 then goto next_item end
     local ingredient_data_type = type(item_name)
     local ingredient_name
     local ingredient_type
@@ -1489,11 +1503,13 @@ local function _depend_on_any_item(item_names, is_silent, levels)
     has_items = true
     local item = find_prototype(ingredient_name, ingredient_type, true)
     if not item then goto next_item end
-    local target_name = ingredient_type .. '-' .. ingredient_name
-    if not names[target_name] then
-      target_names[#target_names + 1] = target_name
-      icons[target_name] = icons_of(item)
-      names[target_name] = locale_of(item)
+    local order = ingredient_name .. '-' .. ingredient_type
+    if not names[order] then
+      names[order] = {
+        order = order,
+        name = locale_of(item),
+        icon = icons_of(item)
+      }
     end
     found_item_names[item] = bor(found_item_names[item] or 0, difficulties)
     ::next_item::
@@ -1501,26 +1517,14 @@ local function _depend_on_any_item(item_names, is_silent, levels)
 
   if not has_items then return {} end
 
-  if #target_names == 0 then
+  if not next(names) then
     return report_error(is_silent, levels, 'None of the items were found.')
-  end
-
-  table.sort(target_names)
-
-  for i = 1,#target_names do
-    local target_name = target_names[i]
-    icons[i] = icons[target_name]
-    names[i] = names[target_name]
-    icons[target_name] = nil
-    names[target_name] = nil
   end
 
   return foobarbaz(
     {
-      target_name = table.concat(target_names, '-or-'),
-      name_type = 'items',
+      name_type = 'item',
       item_names = found_item_names,
-      icons = icons,
       names = names
     },
     levels,
@@ -1563,7 +1567,6 @@ function F.init()
     for mining_drill_name,mining_drill in pairs(data_raw['mining-drill']) do
       register_new_mining_drill(mining_drill, mining_drill_name, nil, true)
     end
-    -- FIXME index everything!
     for mining_drill_name,mining_drill in pairs(data_raw['item']) do
       register_new_item(mining_drill, mining_drill_name, nil, true)
     end
@@ -1571,40 +1574,26 @@ function F.init()
   return F
 end
 
--- TODO mining-drill
+--[[
+
+* mining results from arbitrary autoplaced entities (Wood from trees)
+* items created by a shortcut (that might be unlocked by a technology)
+* Fish - a category all of their own
+* loot from killing units
+* water from an offshore pump
+
+]]
+
 if mods['HighlyDerivative'] then
   HighlyDerivative.register_index('technology', register_new_technology)
   HighlyDerivative.register_index('recipe', register_new_recipe)
   HighlyDerivative.register_index('resource', register_new_resource)
   HighlyDerivative.register_index('mining-drill', register_new_mining_drill)
   HighlyDerivative.register_index('item', register_new_item, true)
+  --HighlyDerivative.register_index('entity', register_new_entity, true)
+  --HighlyDerivative.register_index('offshore-pump', register_new_offshore_pump)
+  --HighlyDerivative.register_index('shortcut', register_new_shortcut)
   HighlyDerivative.index()
 end
-
---[[
-
-Notes on resource dependencies.
-
-A mining drill can extract one or more resource catagories.
-mining-drill.resource_categories
-
-A resource entity belongs to a single resource category.
-resource.category
-
-A resource entity yields some number of items and/or fluids.
-resource.minable.products
-
-A resource entity may require a fluid in order to be mined.
-resource.minable.required_fluid
-
-An item yielded by a resource is unlocked from the start if it can be mined by the vanilla character. (data.raw.character.character.mining_categories)
-possibly unreliable, as we cannot tell which character may or may not be in use during the data stage.
-
-An item/fluid yielded by a resoure is unlocked if it can be mined by a mining drill, using only fluids that have also been unlocked.
-
-Also include the fluid yielded by any offshore pumps.
-offshore_pump.fluid
-
-]]
 
 return F
