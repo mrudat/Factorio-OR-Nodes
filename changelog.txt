@@ -1,12 +1,16 @@
 ---------------------------------------------------------------------------------------------------
-Version: 0.0.4
-Date: TBA
+Version: 0.1.0
+Date: 2020-06-20
 
+  Features:
+    - Add AND-Nodes
+    - Add support for depending on the ability to extract resources.
+  Graphics:
+    - Very (very) slightly niftier technology graphics.
   Changes:
     - Add integration with 'Highly Derivative'
     - Change OR-Nodes to cost no science-packs and a single tick to research.
-    - Add AND-Nodes
-    - Add support for depending on the ability to extract resources.
+    - Changed how technology prototype names are generated to have more consistent results, will now create exactly one technology for any given set of conditions on parent technologies.
 
 ---------------------------------------------------------------------------------------------------
 Version: 0.0.3

@@ -2,7 +2,7 @@ Library to allow mods to request the creation of 'OR nodes' and 'AND nodes' in t
 
 # OR Nodes
 
-For example, if a mod wants to add a dependency on roboports being unlocked, this is currently not possible, as a roboport is unlocked with either researching construction robots or logistics robots.
+If a mod wants to add a dependency on roboports being unlocked, this is currently not directly possible, as a roboport is unlocked with either researching construction robots or logistics robots.
 
 OR nodes allows the creation of a new 'OR node' (technology) that will be immediately researched when any of its prerequisites have been researched.
 
@@ -94,7 +94,7 @@ Returns a technology name that represents that a force:
 
 # Allowed inputs
 
-When supplying a list of things (items, recipes, technologies), you may supply the things in a number of different formats:
+When supplying a list of things (items, recipes, technologies), you may supply the things in several different formats:
 
 * the name of the thing as a string
 * for items (or fluids) only, you can supply a table to allow specifying fluids or items.
@@ -106,11 +106,11 @@ When supplying a list of things (items, recipes, technologies), you may supply t
 * you can supply a dictionary of things as keys, with a value indicating the difficulties (normal/expensive) for which those things are required.
 
 ```lua
--- Requires roboports and iron-gear-wheels on both difficulties, the fluid tender-loving-care for expensive, and tough-love in normal
+-- Requires roboports and iron-gear-wheels on both difficulties, the fluid tender-loving-care for expensive, and the item tough-love in normal
 local items = {
-  roboport = 3, -- DIFFICULTIES_BOTH 0b11
-  [{type = 'fluid', 'tender-loving-care'}] = 2, -- DIFFICULTIES_EXPENSIVE 0b10
-  ['tough-love'] = 1, -- DIFFICULTIES_NORMAL 0b01
+  roboport = 3, -- ORNodes.DIFFICULTIES_BOTH
+  [{type = 'fluid', 'tender-loving-care'}] = 2, -- ORNodes.DIFFICULTIES_EXPENSIVE
+  ['tough-love'] = 1, -- ORNodes.DIFFICULTIES_NORMAL
   'iron-gear-wheel' -- both difficulties if unstated.
 }
 
@@ -131,7 +131,7 @@ local technology = ORNodes.depend_on_all_items(items)
 
 The difficulty support hasn't been well tested.
 
-Can't discover that a technology or recipe is unlocked by script, or that an item is created by script. You're going to have to determine what technology to depend upon by investigation.
+Can't discover that a technology or recipe is unlocked by script, or that an item is created by a script. You're going to have to determine what technology to depend upon by investigation.
 
 # TODO
 
@@ -142,5 +142,3 @@ Does not (yet) support depending on:
 * Fish - a category all of their own
 * loot from killing units
 * water from an offshore pump
-
-Still working on simplifying dependencies for And nodes.
